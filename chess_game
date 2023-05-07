@@ -1,0 +1,153 @@
+#In1
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
+
+# Read the data
+df = pd.read_csv(r'C:\Users\Downloads\archive.zip') #Edit file address
+
+# Preprocessing
+df['winner'] = df['winner'].map({'white': 1, 'black': 0, 'draw': 2})
+df['rating_difference'] = abs(df['white_rating'] - df['black_rating'])
+df = pd.get_dummies(df, columns=['victory_status'])
+
+# Feature selection
+features = ['winner', 'white_rating', 'black_rating', 'rating_difference', 'increment_code']
+features += [col for col in df.columns if col.startswith('victory_status_')]
+df = df[features]
+
+X = df.drop(columns=['winner'])
+y = df['winner']
+
+# Encode categorical features
+le = LabelEncoder()
+X['increment_code'] = le.fit_transform(X['increment_code'])
+
+# Standardize the features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Apply PCA
+pca = PCA(n_components=7)
+X_pca = pca.fit_transform(X_scaled)
+
+# Split the data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X_pca, y, test_size=0.2, random_state=4)
+
+# Store the original dataset for comparison later
+X_train_original, X_test_original, y_train_original, y_test_original = train_test_split(X, y, test_size=0.2, random_state=4)
+
+#In2
+# Random Forest with GridSearchCV
+param_grid = {'n_estimators': [50, 100, 150], 'max_depth': [5, 10, 15]}
+grid_rf = GridSearchCV(RandomForestClassifier(), param_grid, cv=5, scoring='accuracy')
+grid_rf.fit(X_train, y_train)
+best_rf = grid_rf.best_estimator_
+rf_predict = best_rf.predict(X_test)
+rf_accuracy = accuracy_score(y_test, rf_predict)
+
+# Decision Tree with GridSearchCV
+param_grid = {'max_depth': [3, 5, 10, 15, 20]}
+grid_dt = GridSearchCV(DecisionTreeClassifier(), param_grid, cv=5, scoring='accuracy')
+grid_dt.fit(X_train, y_train)
+best_dt = grid_dt.best_estimator_
+dt_predict = best_dt.predict(X_test)
+dt_accuracy = accuracy_score(y_test, dt_predict)
+
+#print(f"Random Forest Accuracy: {rf_accuracy}")
+#print(f"Decision Tree Accuracy: {dt_accuracy}")
+
+#In3
+# Visualizations
+# 1. Histogram of the winner
+plt.hist(df['winner'], rwidth=0.9, alpha=0.3, color='blue', bins=3, edgecolor='purple')
+plt.xlabel('Winner')
+plt.ylabel('Frequency')
+plt.title('Winner Histogram')
+plt.show()
+
+# 2. PCA explained variance ratio
+plt.bar(range(1, len(pca.explained_variance_ratio_) + 1), pca.explained_variance_ratio_)
+plt.xlabel('PCA Component')
+plt.ylabel('Explained Variance Ratio')
+plt.title('PCA Explained Variance Ratio')
+plt.show()
+
+# 3. Random Forest Feature Importance for PCA Components
+feat_importances_rf = pd.Series(best_rf.feature_importances_, index=['PCA Component 1', 'PCA Component 2', 'PCA Component 3', 'PCA Component 4', 'PCA Component 5', 'PCA Component 6', 'PCA Component 7'])
+feat_importances_rf.nlargest(7).plot(kind='barh')
+plt.title('Random Forest Feature Importance for PCA Components')
+plt.show()
+
+# 4. Decision Tree Feature Importance
+feat_importances_dt = pd.Series(best_dt.feature_importances_, index=['PCA Component 1', 'PCA Component 2', 'PCA Component 3', 'PCA Component 4', 'PCA Component 5', 'PCA Component 6', 'PCA Component 7'])
+feat_importances_dt.nlargest(7).plot(kind='barh')
+plt.title('Decision Tree Feature Importance for PCA Components')
+plt.show()
+
+# 5. Distribution of white_rating and black_rating
+sns.kdeplot(df['white_rating'], fill=True, label='White Rating')
+sns.kdeplot(df['black_rating'], fill=True, label='Black Rating')
+plt.xlabel('Rating')
+plt.ylabel('Density')
+plt.title('Distribution of White and Black Ratings')
+plt.legend()
+plt.show()
+
+#In5
+
+print("\nModel Accuracies:")
+print(f"Random Forest Accuracy: {rf_accuracy}")
+print(f"Decision Tree Accuracy: {dt_accuracy}")
+
+print("\nPCA Explained Variance Ratio:")
+for i, explained_var in enumerate(pca.explained_variance_ratio_, start=1):
+    print(f"PCA Component {i}: {explained_var}")
+
+print("\nRandom Forest Feature Importance for PCA Components:")
+for i, importance in enumerate(best_rf.feature_importances_, start=1):
+    print(f"PCA Component {i}: {importance}")
+
+print("\nDecision Tree Feature Importance for PCA Components:")
+for i, importance in enumerate(best_dt.feature_importances_, start=1):
+    print(f"PCA Component {i}: {importance}")
+
+
+print("\nHistogram of the Winner:")
+winner_counts = df['winner'].value_counts().to_dict()
+print(f"White Wins: {winner_counts[1]}, Black Wins: {winner_counts[0]}, Draws: {winner_counts[2]}")
+
+
+print("\nDistribution of White and Black Ratings:")
+print(f"White Rating Mean: {df['white_rating'].mean()}, White Rating Median: {df['white_rating'].median()}, White Rating Standard Deviation: {df['white_rating'].std()}")
+print(f"Black Rating Mean: {df['black_rating'].mean()}, Black Rating Median: {df['black_rating'].median()}, Black Rating Standard Deviation: {df['black_rating'].std()}")
+
+
+# Random Forest Confusion Matrix
+rf_cm = confusion_matrix(y_test, rf_predict)
+print("\nRandom Forest Confusion Matrix:")
+print(rf_cm)
+sns.heatmap(rf_cm, annot=True, cmap='Blues', fmt='g')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Random Forest Confusion Matrix')
+plt.show()
+
+# Decision Tree Confusion Matrix
+dt_cm = confusion_matrix(y_test, dt_predict)
+print("\nDecision Tree Confusion Matrix:")
+print(dt_cm)
+sns.heatmap(dt_cm, annot=True, cmap='Blues', fmt='g')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Decision Tree Confusion Matrix')
+plt.show()
